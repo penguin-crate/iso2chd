@@ -6,4 +6,4 @@ An interactive batch ISO to CHD conversion utility for Arch Linux by **Abhimanyu
 
 ### Using `yay` or `paru`
 ```bash
-yay -S git+[https://github.com/penguin-crate/iso2chd.git](https://github.com/penguin-crate/iso2chd.git)
+yay -S git+https://github.com/penguin-crate/iso2chd.git
