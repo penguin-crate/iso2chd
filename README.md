@@ -11,7 +11,7 @@ An interactive, light-weight batch ISO to CHD conversion utility optimized for A
 
 ## Features
 
-* **DVD Sector Optimization:** Uses `chdman createdvd` under the hood to ensure full compatibility with single and dual-layer PS2 games without sector corruption.
+* **DVD Sector Optimization:** Uses `chdman createdvd` under the hood to ensure full compatibility with single and dual-layer game ISOs without sector corruption.
 * **Interactive & Headless:** Prompts for directory input if run without arguments, or accepts target directories directly via command line.
 * **Tilde Path Expansion:** Full support for `~` paths (e.g. `~/Downloads/ISOs`).
 * **Space Saving:** Automatically removes source `.iso` files only when `chdman` reports a 0 exit status (successful build).
@@ -26,6 +26,6 @@ An interactive, light-weight batch ISO to CHD conversion utility optimized for A
 Ensure you have `git` and `base-devel` installed:
 
 ```bash
-git clone [https://github.com/penguin-crate/iso2chd.git](https://github.com/penguin-crate/iso2chd.git)
+git clone https://github.com/penguin-crate/iso2chd.git
 cd iso2chd
 makepkg -sic
