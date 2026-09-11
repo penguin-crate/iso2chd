@@ -1,6 +1,6 @@
 # Maintainer: Abhimanyu Bhadauriya <abhimanyu@archlinux.org>
 pkgname=iso2chd
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Interactive batch ISO to CHD conversion utility by Abhimanyu Bhadauriya"
 arch=('any')
