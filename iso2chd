@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 AUTHOR="Abhimanyu Bhadauriya"
 
 show_help() {
@@ -14,15 +14,16 @@ USAGE:
 
 DESCRIPTION:
     Interactively or automatically scans a target directory for .iso files,
-    converts them to .chd format using chdman, and removes source files upon success.
+    converts them to .chd format using chdman (DVD mode), and removes source files upon success.
 
 OPTIONS:
-    -h, --help       Show this help message and exit
-    -v, --version    Show version information and exit
+    -h, --help        Show this help message and exit
+    -v, --version     Show version information and exit
 
 EXAMPLES:
     iso2chd                   # Prompts for directory input
     iso2chd /mnt/ps2games     # Converts ISOs in /mnt/ps2games
+    iso2chd ~/Downloads/ISOs  # Converts ISOs expanding home directory
 HELP
 }
 
@@ -51,8 +52,8 @@ fi
 # Default to current directory if blank
 TARGET_DIR="${TARGET_DIR:-.}"
 
-# Expand tilde ~ if user typed it
-TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+# Safely expand tilde ~ to $HOME
+TARGET_DIR="${TARGET_DIR/\~/$HOME}"
 
 # Validate directory existence
 if [ ! -d "$TARGET_DIR" ]; then
@@ -69,7 +70,9 @@ for f in *.iso; do
     [ -f "$f" ] || continue
     found_iso=true
     echo "Compressing: $f"
-    if chdman createcd -i "$f" -o "${f%.iso}.chd"; then
+
+    # Swapped to createdvd for proper DVD/PS2 disc compression
+    if chdman createdvd -i "$f" -o "${f%.iso}.chd"; then
         echo "Successfully converted $f. Removing source ISO..."
         rm "$f"
     else
