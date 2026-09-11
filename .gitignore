@@ -1,3 +1,11 @@
+# Arch Linux build artifacts
 pkg/
 src/
 *.pkg.tar.zst
+*.pkg.tar.xz
+*.log
+
+# Editor / system temp files
+*.swp
+*~
+.DS_Store
