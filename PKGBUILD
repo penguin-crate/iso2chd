@@ -1,12 +1,12 @@
 # Maintainer: Abhimanyu Bhadauriya <abhimanyu@archlinux.org>
 pkgname=iso2chd
-pkgver=1.1.0
+pkgver=2.0.0
 pkgrel=1
-pkgdesc="Interactive batch ISO to CHD conversion utility by Abhimanyu Bhadauriya"
+pkgdesc="Advanced batch ISO/BIN to CHD conversion utility by Abhimanyu Bhadauriya"
 arch=('any')
-url="https://aur.archlinux.org/packages/iso2chd"
+url="https://github.com/penguin-crate/iso2chd"
 license=('GPL-3.0-or-later')
-depends=('bash' 'mame-tools')
+depends=('bash' 'mame-tools' 'coreutils' 'gawk')
 source=("iso2chd"
         "iso2chd.1")
 sha256sums=('SKIP'

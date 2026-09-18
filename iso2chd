@@ -1,87 +1,215 @@
 #!/bin/bash
 
-VERSION="1.1.0"
+VERSION="2.0.0"
 AUTHOR="Abhimanyu Bhadauriya"
+
+# Default options
+KEEP_FILES=false
+VERIFY_CHD=false
+RECURSIVE=false
+MODE="auto"
+CODEC=""
+THREADS=""
+INFO_FILE=""
+TARGETS=()
 
 show_help() {
     cat << HELP
-iso2chd - Batch ISO to CHD conversion utility
+iso2chd - Advanced Batch ISO/BIN to CHD Conversion Utility v$VERSION
 Author: $AUTHOR
 
 USAGE:
-    iso2chd [DIRECTORY]
-    iso2chd [OPTION]
+    iso2chd [OPTIONS] [TARGETS...]
 
 DESCRIPTION:
-    Interactively or automatically scans a target directory for .iso files,
-    converts them to .chd format using chdman (DVD mode), and removes source files upon success.
+    Advanced batch conversion tool for converting disk images (.iso, .bin/.cue)
+    to Compressed Hunks of Data (.chd) format using chdman.
 
 OPTIONS:
-    -h, --help        Show this help message and exit
-    -v, --version     Show version information and exit
+    -r, --recursive       Scan subdirectories recursively
+    -k, --keep            Keep source files after successful conversion
+    -m, --mode <mode>     Conversion mode: auto, dvd (createdvd), cd (createcd)
+    -c, --codec <codec>   Compression codec: zlib, lzma, huff
+    -p, --threads <num>   Number of processor threads to use
+    -v, --verify          Verify CHD integrity after creation
+    --info <file>         Inspect CHD header/metadata using chdman info
+    -h, --help            Show this help message and exit
+    --version             Show version information and exit
 
 EXAMPLES:
-    iso2chd                   # Prompts for directory input
-    iso2chd /mnt/ps2games     # Converts ISOs in /mnt/ps2games
-    iso2chd ~/Downloads/ISOs  # Converts ISOs expanding home directory
+    iso2chd /mnt/ps2games -r -v
+    iso2chd game1.iso game2.iso --codec lzma
+    iso2chd --info game.chd
 HELP
 }
 
-# Parse options
-case "$1" in
-    -h|--help)
-        show_help
-        exit 0
-        ;;
-    -v|--version)
-        echo "iso2chd version $VERSION by $AUTHOR"
-        exit 0
-        ;;
-esac
+# Parse command line options
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h|--help) show_help; exit 0 ;;
+        --version) echo "iso2chd version $VERSION by $AUTHOR"; exit 0 ;;
+        -r|--recursive) RECURSIVE=true ;;
+        -k|--keep) KEEP_FILES=true ;;
+        -m|--mode) MODE="$2"; shift ;;
+        -c|--codec) CODEC="$2"; shift ;;
+        -p|--threads) THREADS="$2"; shift ;;
+        -v|--verify) VERIFY_CHD=true ;;
+        --info) INFO_FILE="$2"; shift ;;
+        --) shift; TARGETS+=("$@"); break ;;
+        -*) echo "Unknown option: $1" >&2; exit 1 ;;
+        *) TARGETS+=("$1") ;;
+    esac
+    shift
+done
+
+# Handle standalone chdman info check option
+if [ -n "$INFO_FILE" ]; then
+    if [ ! -f "$INFO_FILE" ]; then
+        echo "Error: File '$INFO_FILE' does not exist." >&2
+        exit 1
+    fi
+    echo "Running chdman info on: $INFO_FILE"
+    chdman info -i "$INFO_FILE"
+    exit 0
+fi
 
 echo "iso2chd v$VERSION by $AUTHOR"
 echo "-----------------------------------"
 
-TARGET_DIR="$1"
-
-# Interactive fallback
-if [ -z "$TARGET_DIR" ]; then
-    read -rp "Enter the directory you want to scan (press Enter for current dir): " TARGET_DIR
+# Interactive fallback if no targets are supplied
+if [ ${#TARGETS[@]} -eq 0 ]; then
+    read -rp "Enter directories or files to scan (space separated, press Enter for current dir): " -a TARGETS
+    if [ ${#TARGETS[@]} -eq 0 ]; then
+        TARGETS=(".")
+    fi
 fi
 
-# Default to current directory if blank
-TARGET_DIR="${TARGET_DIR:-.}"
+# Expand targets and build file queue list
+EXPANDED_FILES=()
+for target in "${TARGETS[@]}"; do
+    target="${target/\~/$HOME}"
 
-# Safely expand tilde ~ to $HOME
-TARGET_DIR="${TARGET_DIR/\~/$HOME}"
-
-# Validate directory existence
-if [ ! -d "$TARGET_DIR" ]; then
-    echo "Error: Directory '$TARGET_DIR' does not exist." >&2
-    exit 1
-fi
-
-cd "$TARGET_DIR" || exit 1
-echo "Processing .iso files in: $(pwd)"
-
-# Process files
-found_iso=false
-for f in *.iso; do
-    [ -f "$f" ] || continue
-    found_iso=true
-    echo "Compressing: $f"
-
-    # Swapped to createdvd for proper DVD/PS2 disc compression
-    if chdman createdvd -i "$f" -o "${f%.iso}.chd"; then
-        echo "Successfully converted $f. Removing source ISO..."
-        rm "$f"
+    if [ -d "$target" ]; then
+        if [ "$RECURSIVE" = true ]; then
+            while IFS= read -r -d '' file; do
+                EXPANDED_FILES+=("$file")
+            done < <(find "$target" -type f \( -name "*.iso" -o -name "*.bin" -o -name "*.cue" \) -print0)
+        else
+            for file in "$target"/*.iso "$target"/*.bin "$target"/*.cue; do
+                [ -f "$file" ] && EXPANDED_FILES+=("$file")
+            done
+        fi
+    elif [ -f "$target" ]; then
+        EXPANDED_FILES+=("$target")
     else
-        echo "Error compressing $f. Keeping source file." >&2
+        echo "Warning: Target '$target' is not a valid file or directory." >&2
     fi
 done
 
-if [ "$found_iso" = false ]; then
-    echo "No .iso files found in $(pwd)."
-else
-    echo "Batch compression complete!"
+if [ ${#EXPANDED_FILES[@]} -eq 0 ]; then
+    echo "No valid disk image files found to process."
+    exit 0
 fi
+
+total_input_bytes=0
+total_output_bytes=0
+success_count=0
+fail_count=0
+
+echo "Found ${#EXPANDED_FILES[@]} file(s) in queue."
+echo "-----------------------------------"
+
+for f in "${EXPANDED_FILES[@]}"; do
+    # CHD Validation Logic: Prevent trying to convert .chd to .chd
+    if [[ "${f,,}" == *.chd ]]; then
+        echo "Error: Skipping '$f'. CHD files cannot be converted to CHD." >&2
+        continue
+    fi
+
+    if [ ! -f "$f" ]; then
+        continue
+    fi
+
+    file_size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
+    total_input_bytes=$((total_input_bytes + file_size))
+
+    ext="${f##*.}"
+    ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+
+    # Determine mode (Auto, DVD, or CD)
+    subcmd="createdvd"
+    if [ "$MODE" = "cd" ]; then
+        subcmd="createcd"
+    elif [ "$MODE" = "dvd" ]; then
+        subcmd="createdvd"
+    else
+        if [ "$ext_lower" = "cue" ] || [ "$ext_lower" = "bin" ]; then
+            subcmd="createcd"
+        else
+            subcmd="createdvd"
+        fi
+    fi
+
+    out_file="${f%.*}.chd"
+    echo "Processing: $f -> Mode: $subcmd"
+
+    # Construct arguments for chdman
+    chd_args=("$subcmd" "-i" "$f" "-o" "$out_file")
+
+    if [ -n "$CODEC" ]; then
+        chd_args+=("--codec" "$CODEC")
+    fi
+    if [ -n "$THREADS" ]; then
+        chd_args+=("--numprocessors" "$THREADS")
+    fi
+
+    # Execute conversion process
+    if chdman "${chd_args[@]}"; then
+        echo "Successfully converted $f."
+
+        # CHD verification option
+        if [ "$VERIFY_CHD" = true ]; then
+            echo "Verifying CHD integrity..."
+            chdman verify -i "$out_file"
+        fi
+
+        out_size=$(stat -f%z "$out_file" 2>/dev/null || stat -c%s "$out_file" 2>/dev/null || echo 0)
+        total_output_bytes=$((total_output_bytes + out_size))
+
+        if [ "$KEEP_FILES" = false ]; then
+            echo "Removing source file: $f"
+            rm "$f"
+        fi
+        ((success_count++))
+    else
+        echo "Error compressing $f. Keeping source file." >&2
+        ((fail_count++))
+    fi
+    echo "-----------------------------------"
+done
+
+# Format byte sizes for human readability in the summary report
+format_bytes() {
+    local bytes=$1
+    if [ $bytes -gt $((1024*1024*1024)) ]; then
+        awk "BEGIN {printf \"%.2f GB\", $bytes / (1024*1024*1024)}"
+    elif [ $bytes -gt $((1024*1024)) ]; then
+        awk "BEGIN {printf \"%.2f MB\", $bytes / (1024*1024)}"
+    elif [ $bytes -gt 1024 ]; then
+        awk "BEGIN {printf \"%.2f KB\", $bytes / 1024}"
+    else
+        echo "$bytes B"
+    fi
+}
+
+saved_bytes=$((total_input_bytes - total_output_bytes))
+if [ $saved_bytes -lt 0 ]; then
+    saved_bytes=0
+fi
+
+echo "=========================================="
+echo "    Batch Processing Complete!"
+echo "=========================================="
+echo "Successful conversions: $success_count"
+echo "Failed conversions:     $fail_count"
+echo "Total Storage Saved:    $(format_bytes $saved_bytes)"
