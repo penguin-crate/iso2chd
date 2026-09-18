@@ -1,12 +1,14 @@
 pkgbase = iso2chd
-	pkgdesc = Interactive batch ISO to CHD conversion utility by Abhimanyu Bhadauriya
-	pkgver = 1.0.0
+	pkgdesc = Advanced batch ISO/BIN to CHD conversion utility by Abhimanyu Bhadauriya
+	pkgver = 2.0.0
 	pkgrel = 1
-	url = https://aur.archlinux.org/packages/iso2chd
+	url = https://github.com/penguin-crate/iso2chd
 	arch = any
 	license = GPL-3.0-or-later
 	depends = bash
 	depends = mame-tools
+	depends = coreutils
+	depends = gawk
 	source = iso2chd
 	source = iso2chd.1
 	sha256sums = SKIP
